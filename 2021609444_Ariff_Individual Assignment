@@ -1,0 +1,52 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+
+#define MAX_CHILDREN 10
+#define BUFFER_SIZE 256
+
+int num_children = 0;
+int child_pids[MAX_CHILDREN];
+int pipe_fd[MAX_CHILDREN][2];
+
+void parent_handler(int signum) {
+    printf("Parent process received interrupt signal.\n");
+    for (int i = 0; i < num_children; i++) {
+        close(pipe_fd[i][0]);
+        close(pipe_fd[i][1]);
+        kill(child_pids[i], SIGTERM);
+    }
+    exit(signum);
+}
+
+void child_handler(int index) {
+    char buffer[BUFFER_SIZE];
+    close(pipe_fd[index][1]);
+    while (1) {
+        read(pipe_fd[index][0], buffer, BUFFER_SIZE);
+        printf("Child process %d received message: %s", index+1, buffer);
+    }
+}
+
+int main() {
+    char buffer[BUFFER_SIZE];
+    signal(SIGINT, parent_handler);
+
+    while (1) {
+        printf("Enter a message to send to children: ");
+        fgets(buffer, BUFFER_SIZE, stdin);
+        buffer[strcspn(buffer, "\n")] = '\0';  // Remove newline character
+
+        for (int i = 0; i < num_children; i++) {
+            write(pipe_fd[i][1], buffer, strlen(buffer)+1);
+        }
+    }
+
+    for (int i = 0; i < num_children; i++) {
+        close(pipe_fd[i][0]);
+        close(pipe_fd[i][1]);
+    }
+    return 0;
+}
